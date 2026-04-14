@@ -1,0 +1,98 @@
+services:
+  # Service pour l'application Laravel (Backend API)
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: weezer-backend
+    container_name: weezer-api
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./backend:/var/www
+    environment:
+      - TZ=Indian/Reunion
+    env_file:
+      - ./backend/.env
+    networks:
+      - weezer-network
+
+  # Moteur de tâches automatique (Scheduler)
+  scheduler:
+    image: weezer-backend
+    container_name: weezer-scheduler
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./backend:/var/www
+    environment:
+      - TZ=Indian/Reunion
+    env_file:
+      - ./backend/.env
+    # On utilise "schedule:run" dans une boucle infinie shell, c'est plus robuste que "schedule:work" dans certains environnements Docker
+    entrypoint: ["sh", "-c", "while [ true ]; do php artisan schedule:run --no-interaction; sleep 60; done"]
+    networks:
+      - weezer-network
+    depends_on:
+      - db
+      - app
+
+  # Nouveau Service : Frontend React (Vite)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: weezer-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      - TZ=Indian/Reunion
+    volumes:
+      - ./frontend:/var/www/frontend
+      - /var/www/frontend/node_modules
+    networks:
+      - weezer-network
+    depends_on:
+      - app
+
+  # Service Serveur Web (Nginx)
+  webserver:
+    image: nginx:alpine
+    container_name: weezer-web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      - TZ=Indian/Reunion
+    volumes:
+      - ./backend:/var/www
+      - ./nginx/conf.d/:/etc/nginx/conf.d/
+    networks:
+      - weezer-network
+
+  # Service Base de données PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: weezer-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${DB_DATABASE}
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - TZ=Indian/Reunion
+    env_file:
+      - ./backend/.env
+    ports:
+      - "5433:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    networks:
+      - weezer-network
+
+networks:
+  weezer-network:
+    driver: bridge
+
+volumes:
+  dbdata:
