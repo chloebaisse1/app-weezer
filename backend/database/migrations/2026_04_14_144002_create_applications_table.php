@@ -19,11 +19,11 @@ public function up(): void
         $table->boolean('APPACT')->default(true); // Etat
         $table->date('APPDAT')->default(now()); // Date de maj
         
+        $table->string('APPFAMILLE', 50)->nullable();
         $table->string('APPHEB', 30)->nullable()->default(0); 
         $table->integer('APPCRI')->nullable()->default(0);
         $table->integer('IDTAPP')->nullable()->default(0);
         $table->string('APPLIB', 150)->nullable();
-        
         
         $table->timestamps();
     });

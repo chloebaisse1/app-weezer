@@ -18,7 +18,7 @@ class Application extends Model
 
     protected $fillable = [
     'IDAPP', 'IDIURB', 'APPNOM', 'APPCOD', 'APPACT', 
-    'APPDAT', 'APPHEB', 'APPCRI', 'IDTAPP', 'APPLIB', 
+    'APPDAT', 'APPHEB', 'APPCRI', 'IDTAPP', 'APPLIB', 'APPFAMILLE'
     ];
 
     protected $casts = [
