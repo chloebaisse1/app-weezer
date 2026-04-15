@@ -7,13 +7,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Application extends Model
 {
-    // Indiquer à Laravel le nom de la nouvelle clé primaire
+   
     protected $primaryKey = 'IDAPP';
 
-    // Préciser que la clé primaire n'est pas un entier auto-incrémenté par la BDD
+ 
     public $incrementing = false;
 
-    // Si IDAPP est un entier dans la BDD
+  
     protected $keyType = 'int';
 
     protected $fillable = [
@@ -32,6 +32,6 @@ class Application extends Model
      */
     public function sondes(): HasMany
     {
-        return $this->hasMany(SondeDetail::class);
+        return $this->hasMany(SondeDetail::class, 'IDAPP', 'IDAPP');
     }
 }

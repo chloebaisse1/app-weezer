@@ -9,7 +9,6 @@ class SondeDetail extends Model
 {
     protected $table = 'sondes_details';
 
-    // Désactivation de  l'auto-incrémentation car pas de colonne 'id'
     public $incrementing = false;
 
     protected $fillable = [
