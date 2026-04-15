@@ -9,7 +9,6 @@ use Illuminate\Http\JsonResponse;
 
 class ApplicationController extends Controller
 {
-   
     public function index(): JsonResponse
     {
         $applications = Application::withCount('sondes')
@@ -18,44 +17,53 @@ class ApplicationController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'count'  => $applications->count(),
             'data'   => $applications
         ]);
     }
 
-    /**
-     * Récupère les détails d'une application et fusionne les statuts LIVE de PRTG.
-     */
-    public function show($id, PrtgService $prtgService): JsonResponse
-    {
-        // 1. On récupère l'appli et ses sondes depuis PostgreSQL (Données IEL6)
-        $application = Application::with('sondes')->find($id);
+public function show($id, PrtgService $prtgService): JsonResponse
+{
+    
+    set_time_limit(120); 
 
-        if (!$application) {
-            return response()->json(['message' => 'Application non trouvée'], 404);
+    $application = Application::with('sondes')->find($id);
+    if (!$application) return response()->json(['message' => 'Application non trouvée'], 404);
+
+    $allIds = $application->sondes->pluck('SONPRTG')->filter()->unique()->toArray();
+    
+   
+    $chunks = array_chunk($allIds, 30); 
+    $allPrtgData = [];
+
+    foreach ($chunks as $chunk) {
+        $batch = $prtgService->getSensorsStatuses($chunk);
+        if (!empty($batch)) {
+            $allPrtgData = array_merge($allPrtgData, $batch);
         }
-
-        // 2. On récupère les IDs PRTG pour l'appel groupé
-        $prtgIds = $application->sondes->pluck('SONPRTG')->filter()->toArray();
-
-        // 3. On récupère les données en direct via le service PRTG
-        $prtgData = $prtgService->getSensorsStatuses($prtgIds);
-
-        // 4. On enrichit nos données locales avec le statut Live
-        $application->sondes->map(function ($sonde) use ($prtgData) {
-            $statusInfo = collect($prtgData)->firstWhere('objid', $sonde->SONPRTG);
-            
-            // Ajout des champs dynamiques pour le Front
-            $sonde->live_status = $statusInfo['status'] ?? 'Inconnu';
-            $sonde->live_value  = $statusInfo['lastvalue'] ?? 'N/A';
-            $sonde->live_message = $statusInfo['message'] ?? null;
-            
-            return $sonde;
-        });
-
-        return response()->json([
-            'status' => 'success',
-            'data'   => $application
-        ]);
     }
+
+    $liveMap = collect($allPrtgData)->keyBy(fn($item) => (int)$item['objid']);
+
+    foreach ($application->sondes as $sonde) {
+        $sondeId = (int)$sonde->SONPRTG;
+        if ($liveMap->has($sondeId)) {
+            $data = $liveMap->get($sondeId);
+            $sonde->live_status = $data['status'] ?? 'OK';
+            $sonde->live_value  = $data['lastvalue'] ?? 'N/A';
+        } else {
+            // Si l'ID n'est pas revenu, on laisse Inconnu
+            $sonde->live_status = 'Non trouvé sur PRTG';
+            $sonde->live_value  = 'N/A';
+        }
+    }
+
+    return response()->json([
+        'status' => 'success',
+        'meta' => [
+            'total_ids' => count($allIds),
+            'recuperes' => count($allPrtgData)
+        ],
+        'data' => $application
+    ]);
+}
 }
