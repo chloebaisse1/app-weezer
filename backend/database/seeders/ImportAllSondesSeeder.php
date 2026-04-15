@@ -22,7 +22,7 @@ class ImportAllSondesSeeder extends Seeder
                     if (isset($serveur['sondes']) && is_array($serveur['sondes'])) {
                         foreach ($serveur['sondes'] as $sonde) {
                             
-                            // VERIFICATION CRUCIALE : On n'importe que si on a un ID PRTG
+                            
                             if (!empty($sonde['SONPRTG'])) {
                                 SondeDetail::updateOrCreate(
                                     [
