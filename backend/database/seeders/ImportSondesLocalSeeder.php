@@ -20,7 +20,7 @@ class ImportSondesLocalSeeder extends Seeder
         $json = File::get($filePath);
         $data = json_decode($json, true);
 
-        // On vérifie que la structure contient bien des serveurs (comme sur ta capture)
+        
         $serveurs = $data['serveurs'] ?? [];
         $count = 0;
 
@@ -30,7 +30,7 @@ class ImportSondesLocalSeeder extends Seeder
 
             foreach ($sondes as $sonde) {
                 SondeDetail::updateOrCreate([
-                    'IDAPP'   => $data['IDAPP'], // ID 9 dans ton exemple
+                    'IDAPP'   => $data['IDAPP'], 
                     'IDSER'   => $idSer,
                     'SONPRTG' => $sonde['SONPRTG']
                 ]);

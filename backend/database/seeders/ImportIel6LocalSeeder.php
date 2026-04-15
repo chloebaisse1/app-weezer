@@ -24,7 +24,7 @@ class ImportIel6LocalSeeder extends Seeder
 
         foreach ($apps as $appData) {
             try {
-                // On ne liste QUE les colonnes qui existent réellement dans ta table
+               
                 Application::updateOrCreate(
                     ['IDAPP' => $appData['IDAPP']],
                     [
