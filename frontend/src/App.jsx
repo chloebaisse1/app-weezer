@@ -1,50 +1,68 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import api from './api';
+import api from './lib/api';
 import { MainLayout } from '@/components/layouts/MainLayout';
 import { FamilyCard } from '@/components/FamilyCard';
-import { FamilyDetailView } from './components/FamilyDetailView'; 
-import { ApplicationDetailView } from './components/ApplicationDetailView';
-
+import { FamilyDetailView } from './components/views/FamilyDetailView'; 
+import { ApplicationDetailView } from './components/views/ApplicationDetailView';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 function App() {
- 
   const [stats, setStats] = useState(null); 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
   // États de navigation
-  const [selectedFamilyId, setSelectedFamilyId] = useState(null);
+  const [selectedFamilyName, setSelectedFamilyName] = useState(null);
   const [selectedAppId, setSelectedAppId] = useState(null);
 
-  console.log("Vue actuelle :", selectedFamilyId ? `Famille ${selectedFamilyId}` : "Accueil");
+  // LOGIQUE DE PAGINATION (6 cartes par page : 3x2)
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  
+  // On découpe le tableau des familles pour n'afficher que les 6 concernées
+  const currentFamilies = stats?.families?.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil((stats?.families?.length || 0) / itemsPerPage);
 
   const fetchGlobalStats = useCallback(() => {
-    setLoading(true);
+    if (!stats) setLoading(true);
+
     api.get('/dashboard/stats')
       .then(res => {
         if (res.data && res.data.success) {
-          setStats(res.data);
+          setStats(res.data.data);
           setError(null);
         } else {
-          setError("Format de données invalide reçu de l'API.");
+          setError("Flux Nebula corrompu (Format invalide).");
         }
-        setLoading(false);
       })
       .catch(err => {
-        console.error("Erreur de synchronisation Nebula:", err);
-        const message = err.response?.data?.error || "Impossible de joindre l'API Weezer (Vérifiez le port 8080).";
+        console.error("Nebula Sync Error:", err);
+        const message = err.response?.data?.error || "Liaison API perdue (Vérifiez Docker port 8080).";
         setError(message);
+      })
+      .finally(() => {
         setLoading(false);
       });
-  }, []);
+  }, [stats]);
 
   useEffect(() => {
     fetchGlobalStats();
-    const interval = setInterval(fetchGlobalStats, 120000);
+    const interval = setInterval(fetchGlobalStats, 60000);
     return () => clearInterval(interval);
   }, [fetchGlobalStats]);
 
 
+  useEffect(() => {
+    if (!selectedFamilyName && !selectedAppId) {
+      
+    }
+  }, [selectedFamilyName, selectedAppId]);
+
+
+ 
   if (loading && !stats) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#020617]">
@@ -57,6 +75,7 @@ function App() {
       </div>
     );
   }
+
 
   if (error) {
     return (
@@ -81,7 +100,7 @@ function App() {
     );
   }
 
-  
+ 
   if (selectedAppId) {
     return (
       <ApplicationDetailView 
@@ -91,38 +110,71 @@ function App() {
     );
   }
 
-  // VUE 2 : DÉTAIL FAMILLE
-  if (selectedFamilyId) {
+
+  if (selectedFamilyName) {
     return (
       <FamilyDetailView 
-        familyId={selectedFamilyId} 
-        onBack={() => setSelectedFamilyId(null)} 
+        familyName={selectedFamilyName} 
+        onBack={() => setSelectedFamilyName(null)} 
         onSelectApp={(appId) => setSelectedAppId(appId)} 
       />
     );
   }
 
-  // VUE 1 : ACCUEIL GLOBAL
-  return (
-    <MainLayout stats={stats} onNavigateHome={() => setSelectedFamilyId(null)}>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 p-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        {stats?.families?.map((family) => (
-          <div 
-            key={family.id} 
-            onClick={() => setSelectedFamilyId(family.id)}
-            className="cursor-pointer group"
+return (
+  <MainLayout stats={stats} onNavigateHome={() => setSelectedFamilyName(null)}>
+    <div className="relative flex items-center justify-between gap-4 min-h-[600px] animate-in fade-in duration-700">
+      
+      
+      <div className="w-16 flex justify-center">
+        {totalPages > 1 && (
+          <button 
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(prev => prev - 1)}
+            className="group flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900/40 border border-white/5 text-slate-500 hover:border-blue-500 hover:text-blue-400 disabled:opacity-0 disabled:pointer-events-none transition-all duration-300 backdrop-blur-md shadow-2xl"
           >
-            <FamilyCard family={family} />
-          </div>
-        ))}
-        
-        {(!stats?.families || stats.families.length === 0) && (
-          <div className="col-span-full text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs border border-dashed border-white/5 rounded-3xl">
-            No Nebula Data Streams Detected
-          </div>
+            <ChevronLeft size={28} className="group-hover:-translate-x-1 transition-transform" />
+          </button>
         )}
       </div>
-    </MainLayout>
+
+      
+      <div className="flex-grow">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 p-2">
+          {currentFamilies?.map((family) => (
+            <div 
+              key={family.name} 
+              onClick={() => setSelectedFamilyName(family.name)}
+              className="cursor-pointer group transition-transform hover:scale-[1.02]"
+            >
+              <FamilyCard family={family} />
+            </div>
+          ))}
+          
+          {(!stats?.families || stats.families.length === 0) && (
+            <div className="col-span-full text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs border border-dashed border-white/5 rounded-3xl">
+              No Nebula Data Streams Detected
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* FLÈCHE DROITE */}
+      <div className="w-16 flex justify-center">
+        {totalPages > 1 && (
+          <button 
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage(prev => prev + 1)}
+            className="group flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900/40 border border-white/5 text-slate-500 hover:border-blue-500 hover:text-blue-400 disabled:opacity-0 disabled:pointer-events-none transition-all duration-300 backdrop-blur-md shadow-2xl"
+          >
+            <ChevronRight size={28} className="group-hover:translate-x-1 transition-transform" />
+          </button>
+        )}
+      </div>
+
+    </div>
+  </MainLayout>
   );
 }
 
