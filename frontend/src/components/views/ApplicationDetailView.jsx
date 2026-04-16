@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import api from '../api';
-import { MainLayout } from './layouts/MainLayout';
+import api from '../../lib/api';
+import { MainLayout } from '../layouts/MainLayout';
 import { 
   ArrowLeft, Activity, Zap, ShieldCheck, AlertCircle, 
   Clock, BarChart3, ListFilter, Search

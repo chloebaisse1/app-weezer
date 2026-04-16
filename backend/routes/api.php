@@ -11,9 +11,9 @@ use App\Http\Controllers\Api\SondeController;
 Route::get('/dashboard/stats', [DashboardController::class, 'index']);
 
 
-// --- VUE 2 : FAMILLES ---
-// Récupère les applications appartenant à une famille spécifique
-Route::get('/families/{id}', [ApplicationController::class, 'getByFamily']);
+// --- VUE 2 : FAMILLES (QUARTIERS) ---
+// On utilise {name} car c'est ce qu'on envoie (ex: 'Finance', 'RH')
+Route::get('/applications/family/{name}', [ApplicationController::class, 'getByFamily']);
 
 
 // --- VUE 3 : APPLICATIONS (LIVE PRTG) ---
