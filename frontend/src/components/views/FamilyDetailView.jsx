@@ -4,7 +4,7 @@ import { ApplicationCard } from "../ApplicationCard";
 import { MainLayout } from "../layouts/MainLayout";
 import { 
   ArrowLeft, ChevronLeft, ChevronRight, RefreshCcw, 
-  LayoutGrid, ShieldCheck, AlertTriangle, Zap, EyeOff 
+  LayoutGrid, ShieldCheck, AlertTriangle, Zap 
 } from 'lucide-react';
 
 function StatBadge({ label, value, icon, colorClass, borderColorClass }) {
@@ -33,10 +33,8 @@ export function FamilyDetailView({ familyName, onBack, onSelectApp }) {
   const fetchData = useCallback((showLoading = false) => {
     if (showLoading) setLoading(true);
     
-   
     api.get(`/applications/family/${familyName}?page=${currentPage}`)
       .then(res => {
-       
         setData(res.data.data || res.data);
         setLoading(false);
       })
@@ -71,7 +69,6 @@ export function FamilyDetailView({ familyName, onBack, onSelectApp }) {
 
   if (!data) return null;
 
-  
   const applications = data.applications || [];
   const stats = data.family_stats || { up: 0, warn: 0, down: 0, total: 0 };
   const pagination = data.pagination || { current_page: 1, last_page: 1 };
@@ -98,7 +95,7 @@ export function FamilyDetailView({ familyName, onBack, onSelectApp }) {
             </button>
             <div>
               <h1 className="text-4xl font-[1000] text-slate-900 dark:text-white italic tracking-tighter uppercase leading-none">
-                Quartier <span className="text-blue-500">{familyName}</span>
+                Famille <span className="text-blue-500">{familyName}</span>
               </h1>
               <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.3em] mt-2">
                 Monitoring de Secteur | {stats.total} Appareils Connectés
@@ -115,7 +112,7 @@ export function FamilyDetailView({ familyName, onBack, onSelectApp }) {
           <StatBadge label="Critical" value={stats.down} icon={<Zap size={16}/>} colorClass="text-red-500" borderColorClass="border-red-500/10" />
         </div>
 
-        
+        {/* APPLICATIONS GRID */}
         <div className="relative flex items-center justify-between gap-4">
           
           <div className="w-12">
@@ -131,7 +128,21 @@ export function FamilyDetailView({ familyName, onBack, onSelectApp }) {
 
           <div className="flex-grow grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {applications.map((app) => (
-              <ApplicationCard key={app.id} app={app} onSelect={onSelectApp} />
+              <ApplicationCard 
+                key={app.id || app.IDAPP} 
+                app={{
+                  ...app,
+                  name: app.APPNOM || "Sans Nom", 
+                  status: {
+                    id: app.status_id || 0, 
+                    label: app.status_label || 'NON SUIVI',
+                    updated_at: app.updated_at || 'N/A'
+                  },
+                  health_score: app.health_score || 0,
+                  sensors_count: app.sondes_count || 0
+                }} 
+                onSelect={onSelectApp} 
+              />
             ))}
           </div>
 
