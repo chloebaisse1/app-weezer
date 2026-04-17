@@ -11,22 +11,24 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // États de navigation
+ 
   const [selectedFamilyName, setSelectedFamilyName] = useState(null);
   const [selectedAppId, setSelectedAppId] = useState(null);
 
-  // LOGIQUE DE PAGINATION (6 cartes par page : 3x2)
+  
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
+  // Calculs pour la pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   
-  // On découpe le tableau des familles pour n'afficher que les 6 concernées
   const currentFamilies = stats?.families?.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil((stats?.families?.length || 0) / itemsPerPage);
 
+
   const fetchGlobalStats = useCallback(() => {
+  
     if (!stats) setLoading(true);
 
     api.get('/dashboard/stats')
@@ -46,23 +48,37 @@ function App() {
       .finally(() => {
         setLoading(false);
       });
-  }, [stats]);
+  }, []); 
 
+  // Cycle de rafraîchissement (Initial + toutes les 60s)
   useEffect(() => {
     fetchGlobalStats();
     const interval = setInterval(fetchGlobalStats, 60000);
     return () => clearInterval(interval);
   }, [fetchGlobalStats]);
 
+  // Vue Détail Application
+  if (selectedAppId) {
+    return (
+      <ApplicationDetailView 
+        applicationId={selectedAppId} 
+        onBack={() => setSelectedAppId(null)} 
+      />
+    );
+  }
 
-  useEffect(() => {
-    if (!selectedFamilyName && !selectedAppId) {
-      
-    }
-  }, [selectedFamilyName, selectedAppId]);
+  // Vue Détail Famille (Quartier)
+  if (selectedFamilyName) {
+    return (
+      <FamilyDetailView 
+        familyName={selectedFamilyName} 
+        onBack={() => setSelectedFamilyName(null)} 
+        onSelectApp={(appId) => setSelectedAppId(appId)} 
+      />
+    );
+  }
 
-
- 
+  // Écran de chargement initial
   if (loading && !stats) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#020617]">
@@ -76,7 +92,7 @@ function App() {
     );
   }
 
-
+  // Écran d'erreur critique
   if (error) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#020617] p-6 text-center">
@@ -91,7 +107,10 @@ function App() {
             {error}
           </p>
           <div className="flex flex-col gap-3">
-            <button onClick={() => fetchGlobalStats()} className="rounded-xl bg-red-600/10 border border-red-600/50 px-8 py-3 text-xs font-black text-red-500 shadow-lg hover:bg-red-600 hover:text-white transition-all active:scale-95 uppercase tracking-widest">
+            <button 
+              onClick={() => fetchGlobalStats()} 
+              className="rounded-xl bg-red-600/10 border border-red-600/50 px-8 py-3 text-xs font-black text-red-500 shadow-lg hover:bg-red-600 hover:text-white transition-all active:scale-95 uppercase tracking-widest"
+            >
               Retry Connection
             </button>
           </div>
@@ -100,81 +119,63 @@ function App() {
     );
   }
 
- 
-  if (selectedAppId) {
-    return (
-      <ApplicationDetailView 
-        applicationId={selectedAppId} 
-        onBack={() => setSelectedAppId(null)} 
-      />
-    );
-  }
 
-
-  if (selectedFamilyName) {
-    return (
-      <FamilyDetailView 
-        familyName={selectedFamilyName} 
-        onBack={() => setSelectedFamilyName(null)} 
-        onSelectApp={(appId) => setSelectedAppId(appId)} 
-      />
-    );
-  }
-
-return (
-  <MainLayout stats={stats} onNavigateHome={() => setSelectedFamilyName(null)}>
-    <div className="relative flex items-center justify-between gap-4 min-h-[600px] animate-in fade-in duration-700">
-      
-      
-      <div className="w-16 flex justify-center">
-        {totalPages > 1 && (
-          <button 
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage(prev => prev - 1)}
-            className="group flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900/40 border border-white/5 text-slate-500 hover:border-blue-500 hover:text-blue-400 disabled:opacity-0 disabled:pointer-events-none transition-all duration-300 backdrop-blur-md shadow-2xl"
-          >
-            <ChevronLeft size={28} className="group-hover:-translate-x-1 transition-transform" />
-          </button>
-        )}
-      </div>
-
-      
-      <div className="flex-grow">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 p-2">
-          {currentFamilies?.map((family) => (
-            <div 
-              key={family.name} 
-              onClick={() => setSelectedFamilyName(family.name)}
-              className="cursor-pointer group transition-transform hover:scale-[1.02]"
+  return (
+    <MainLayout stats={stats} onNavigateHome={() => {
+      setSelectedFamilyName(null);
+      setSelectedAppId(null);
+    }}>
+      <div className="relative flex items-center justify-between gap-4 min-h-[600px] animate-in fade-in duration-700">
+        
+        {/* FLÈCHE GAUCHE */}
+        <div className="w-16 flex justify-center">
+          {totalPages > 1 && (
+            <button 
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(prev => prev - 1)}
+              className="group flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900/40 border border-white/5 text-slate-500 hover:border-blue-500 hover:text-blue-400 disabled:opacity-0 disabled:pointer-events-none transition-all duration-300 backdrop-blur-md shadow-2xl"
             >
-              <FamilyCard family={family} />
-            </div>
-          ))}
-          
-          {(!stats?.families || stats.families.length === 0) && (
-            <div className="col-span-full text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs border border-dashed border-white/5 rounded-3xl">
-              No Nebula Data Streams Detected
-            </div>
+              <ChevronLeft size={28} className="group-hover:-translate-x-1 transition-transform" />
+            </button>
+          )}
+        </div>
+
+        {/* GRILLE DES FAMILLES */}
+        <div className="flex-grow">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 p-2">
+            {currentFamilies?.map((family) => (
+              <div 
+                key={family.name} 
+                onClick={() => setSelectedFamilyName(family.name)}
+                className="cursor-pointer group transition-transform hover:scale-[1.02]"
+              >
+                <FamilyCard family={family} />
+              </div>
+            ))}
+            
+            {(!stats?.families || stats.families.length === 0) && (
+              <div className="col-span-full text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs border border-dashed border-white/5 rounded-3xl">
+                No Nebula Data Streams Detected
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* FLÈCHE DROITE */}
+        <div className="w-16 flex justify-center">
+          {totalPages > 1 && (
+            <button 
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(prev => prev + 1)}
+              className="group flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900/40 border border-white/5 text-slate-500 hover:border-blue-500 hover:text-blue-400 disabled:opacity-0 disabled:pointer-events-none transition-all duration-300 backdrop-blur-md shadow-2xl"
+            >
+              <ChevronRight size={28} className="group-hover:translate-x-1 transition-transform" />
+            </button>
           )}
         </div>
 
       </div>
-
-      {/* FLÈCHE DROITE */}
-      <div className="w-16 flex justify-center">
-        {totalPages > 1 && (
-          <button 
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage(prev => prev + 1)}
-            className="group flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900/40 border border-white/5 text-slate-500 hover:border-blue-500 hover:text-blue-400 disabled:opacity-0 disabled:pointer-events-none transition-all duration-300 backdrop-blur-md shadow-2xl"
-          >
-            <ChevronRight size={28} className="group-hover:translate-x-1 transition-transform" />
-          </button>
-        )}
-      </div>
-
-    </div>
-  </MainLayout>
+    </MainLayout>
   );
 }
 
