@@ -27,3 +27,6 @@ Route::get('/applications', [ApplicationController::class, 'index']);
 // --- SONDES ---
 // Détails spécifiques d'une sonde si nécessaire
 Route::get('/sondes/{id}', [SondeController::class, 'show']);
+
+
+Route::get('/monitor-data', [ApplicationController::class, 'monitorData']);
