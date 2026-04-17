@@ -3,7 +3,7 @@ import api from '../../lib/api';
 import { MainLayout } from '../layouts/MainLayout';
 import { 
   ArrowLeft, Activity, Zap, ShieldCheck, AlertCircle, 
-  Clock, BarChart3, ListFilter, Search
+  Clock, BarChart3, ListFilter, Search, ChevronLeft as PagLeft, ChevronRight as PagRight
 } from 'lucide-react';
 
 /**
@@ -38,17 +38,21 @@ function ProgressBar({ label, value, color }) {
   );
 }
 
-/**
- * Vue détaillée d'une application (Vue 3)
- */
 export function ApplicationDetailView({ applicationId, onBack }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // État pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const fetchDetails = useCallback(() => {
     api.get(`/applications/${applicationId}?nocache=${Date.now()}`)
       .then(res => {
-        setData(res.data);
+        if (res.data.success) {
+          setData(res.data.data);
+        }
         setLoading(false);
       })
       .catch(err => {
@@ -72,19 +76,36 @@ export function ApplicationDetailView({ applicationId, onBack }) {
     </div>
   );
 
-  const { application, sensors } = data;
-  const health = application.health_score || 0;
+  // Destructuration des données reçues du backend
+  const { 
+    sensors = [], 
+    stats = {}, 
+    health_score: health = 0, 
+    family_name: familyName = "FAMILLE INCONNUE", 
+    name: applicationName,
+    resource_usage = { cpu: 0, ram: 0, disk: 0, network: 0 } 
+  } = data;
 
-  // LOGIQUE HEADER : Unités (1/0) selon les nouveaux seuils (50/80)
+  // 1. Filtrage des sondes
+  const filteredSensors = sensors.filter(s => 
+    s.sensor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.SONPRTG?.toString().includes(searchTerm)
+  );
+
+  // 2. Calcul de la pagination
+  const totalItems = filteredSensors.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedSensors = filteredSensors.slice(startIndex, startIndex + itemsPerPage);
+
   const headerStats = {
     is_application: true,
-    up: health >= 80 ? 1 : 0,
-    warn: (health >= 50 && health < 80) ? 1 : 0,
-    down: health < 50 ? 1 : 0,
+    up: stats?.up || 0,
+    warn: stats?.warn || 0,
+    down: stats?.down || 0,
     global_health: health,
-    family_name: application.family_name,
-    family_stats: null,
-    last_sync: data.last_sync || new Date().toLocaleTimeString('fr-FR')
+    family_name: familyName, 
+    last_sync: new Date().toLocaleTimeString('fr-FR')
   };
 
   return (
@@ -99,13 +120,12 @@ export function ApplicationDetailView({ applicationId, onBack }) {
               className="flex items-center gap-2 text-[10px] font-black text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 uppercase tracking-[0.2em] transition-colors group"
             >
               <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
-              RETOUR {application.family_name}
+              RETOUR {familyName}
             </button>
             <div className="flex items-center gap-3">
               <h1 className="text-5xl font-[1000] text-slate-900 dark:text-white italic tracking-tighter uppercase leading-none">
-                {application.name}
+                {applicationName}
               </h1>
-              {/* BADGE DE STATUT : Seuils 50/80 */}
               <div className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest italic ${
                   health >= 80 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' :
                   health >= 50 ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400' :
@@ -117,16 +137,13 @@ export function ApplicationDetailView({ applicationId, onBack }) {
           </div>
 
           <div className="flex gap-3">
-            <button className="px-4 py-2 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/5 rounded-xl text-slate-600 dark:text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm active:scale-95 flex items-center gap-2">
+            <button onClick={fetchDetails} className="px-4 py-2 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-white/5 rounded-xl text-slate-600 dark:text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm active:scale-95 flex items-center gap-2">
               <Zap size={14} className="text-amber-500 dark:text-amber-400" /> SCANNER
-            </button>
-            <button className="px-4 py-2 bg-blue-600 border border-blue-400/50 rounded-xl text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg active:scale-95 flex items-center gap-2">
-               PARAMÈTRES
             </button>
           </div>
         </div>
 
-        {/* GRILLE KPI : Couleurs selon seuils 50/80 */}
+        {/* GRILLE KPI */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard 
             title="INDICE DE SANTÉ" 
@@ -145,61 +162,85 @@ export function ApplicationDetailView({ applicationId, onBack }) {
 
         {/* CONTENU PRINCIPAL */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-3xl overflow-hidden shadow-sm dark:shadow-2xl backdrop-blur-xl">
-            <div className="p-6 border-b border-slate-100 dark:border-white/5 flex justify-between items-center bg-slate-50/50 dark:bg-white/[0.02]">
-              <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
-                <ListFilter size={16} className="text-blue-500" /> TÉLÉMÉTRIE LIVE DES SONDES
-              </h3>
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="FILTRER SONDES..." 
-                  className="bg-white dark:bg-slate-950/50 border border-slate-200 dark:border-white/5 rounded-lg pl-9 pr-4 py-2 text-[10px] font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 transition-all w-64"
-                />
+          <div className="lg:col-span-2 flex flex-col gap-4">
+            <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-3xl overflow-hidden shadow-sm dark:shadow-2xl backdrop-blur-xl">
+              <div className="p-6 border-b border-slate-100 dark:border-white/5 flex justify-between items-center bg-slate-50/50 dark:bg-white/[0.02]">
+                <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
+                  <ListFilter size={16} className="text-blue-500" /> TÉLÉMÉTRIE LIVE DES SONDES
+                </h3>
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    type="text" 
+                    value={searchTerm}
+                    onChange={(e) => {setSearchTerm(e.target.value); setCurrentPage(1);}}
+                    placeholder="FILTRER SONDES..." 
+                    className="bg-white dark:bg-slate-950/50 border border-slate-200 dark:border-white/5 rounded-lg pl-9 pr-4 py-2 text-[10px] font-bold text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 transition-all w-64"
+                  />
+                </div>
               </div>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-slate-50/50 dark:bg-white/[0.01] text-[9px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-100 dark:border-white/5">
-                    <th className="px-6 py-4">STATUT</th>
-                    <th className="px-6 py-4">NOM DE LA SONDE</th>
-                    <th className="px-6 py-4">VALEUR TEMPS RÉEL</th>
-                    <th className="px-6 py-4">DERNIER CHECK</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                  {sensors.map(sensor => (
-                    <tr key={sensor.id} className="group hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
-                      <td className="px-6 py-4">
-                        <div className={`h-6 w-6 rounded-full flex items-center justify-center border ${
-                          sensor.status_id === 3 
-                          ? 'bg-emerald-500/10 border-emerald-500/20' 
-                          : 'bg-red-500/10 border-red-500/20'
-                        }`}>
-                          {sensor.status_id === 3 ? (
-                            <ShieldCheck size={12} className="text-emerald-600 dark:text-emerald-500" />
-                          ) : (
-                            <AlertCircle size={12} className="text-red-600 dark:text-red-500" />
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 font-bold text-slate-900 dark:text-white uppercase tracking-tight text-xs group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                        {sensor.name} <br/>
-                        <span className="text-[8px] font-black text-slate-400 dark:text-slate-600 tracking-widest mt-0.5 uppercase">ID: {sensor.id_prtg}</span>
-                      </td>
-                      <td className={`px-6 py-4 text-xs font-black italic ${sensor.status_id === 3 ? 'text-slate-900 dark:text-white' : 'text-red-500'}`}>
-                        {sensor.last_value}
-                      </td>
-                      <td className="px-6 py-4 text-slate-400 italic text-[10px] font-bold flex items-center gap-2">
-                        <Clock size={10} /> {sensor.updated_at}
-                      </td>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-slate-50/50 dark:bg-white/[0.01] text-[9px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-100 dark:border-white/5">
+                      <th className="px-6 py-4">STATUT</th>
+                      <th className="px-6 py-4">NOM DE LA SONDE</th>
+                      <th className="px-6 py-4">VALEUR TEMPS RÉEL</th>
+                      <th className="px-6 py-4">DERNIER CHECK</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                    {paginatedSensors.map(sensor => (
+                      <tr key={sensor.id} className="group hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
+                        <td className="px-6 py-4">
+                          <div className={`h-6 w-6 rounded-full flex items-center justify-center border ${
+                            sensor.status_id === 3 
+                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600' 
+                            : 'bg-red-500/10 border-red-500/20 text-red-600'
+                          }`}>
+                            {sensor.status_id === 3 ? <ShieldCheck size={12} /> : <AlertCircle size={12} />}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 font-bold text-slate-900 dark:text-white uppercase tracking-tight text-xs group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                          {sensor.sensor_name || "SONDE PRTG"} <br/>
+                          <span className="text-[8px] font-black text-slate-400 dark:text-slate-600 tracking-widest mt-0.5 uppercase">ID PRTG: {sensor.SONPRTG}</span>
+                        </td>
+                        <td className={`px-6 py-4 text-xs font-black italic ${sensor.status_id === 3 ? 'text-slate-900 dark:text-white' : 'text-red-500'}`}>
+                          {sensor.last_value || "---"}
+                        </td>
+                        <td className="px-6 py-4 text-slate-400 italic text-[10px] font-bold flex items-center gap-2">
+                          <Clock size={10} /> {new Date().toLocaleTimeString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* BARRE DE PAGINATION */}
+              <div className="p-4 border-t border-slate-100 dark:border-white/5 flex justify-between items-center bg-slate-50/30 dark:bg-white/[0.02]">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest italic">
+                  Affichage {startIndex + 1}-{Math.min(startIndex + itemsPerPage, totalItems)} sur {totalItems}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 text-slate-500 hover:text-blue-500 disabled:opacity-30 disabled:hover:text-slate-500 transition-all shadow-sm"
+                  >
+                    <PagLeft size={16} />
+                  </button>
+                  <span className="text-[10px] font-black text-slate-900 dark:text-white px-3">{currentPage} / {totalPages || 1}</span>
+                  <button 
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                    className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 text-slate-500 hover:text-blue-500 disabled:opacity-30 disabled:hover:text-slate-500 transition-all shadow-sm"
+                  >
+                    <PagRight size={16} />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -209,14 +250,11 @@ export function ApplicationDetailView({ applicationId, onBack }) {
                 <BarChart3 size={16} className="text-blue-500" /> CHARGE RESSOURCES
               </h3>
               <div className="space-y-6">
-                <ProgressBar label="Utilisation CPU" value={42} color="bg-blue-500" />
-                <ProgressBar label="Charge Mémoire" value={68} color="bg-blue-400" />
-                <ProgressBar label="Capacité Stockage" value={31} color="bg-emerald-500" />
-                <ProgressBar label="Flux Réseau" value={14} color="bg-amber-500" />
+                <ProgressBar label="Utilisation CPU" value={resource_usage.cpu} color="bg-blue-500" />
+                <ProgressBar label="Charge Mémoire" value={resource_usage.ram} color="bg-blue-400" />
+                <ProgressBar label="Capacité Stockage" value={resource_usage.disk} color="bg-emerald-500" />
+                <ProgressBar label="Flux Réseau" value={resource_usage.network} color="bg-amber-500" />
               </div>
-              <button className="w-full mt-8 py-3 border border-slate-200 dark:border-white/5 rounded-xl text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] hover:bg-slate-50 dark:hover:bg-white/5 hover:text-blue-600 dark:hover:text-white transition-all">
-                VOIR DÉTAILS INFRASTRUCTURE
-              </button>
             </div>
           </div>
         </div>

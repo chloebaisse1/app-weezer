@@ -14,8 +14,11 @@ class PrtgService
         $username = config('services.prtg.username');
         $passhash = config('services.prtg.passhash');
 
-       
-        $url = "https://{$ip}/api/table.json?content=sensors&output=json&columns=objid,status,status_raw,sensor&count=5000&username={$username}&passhash={$passhash}";
+        /**
+         * AJOUT DE 'lastvalue' DANS LES COLONNES
+         * Sans cela, PRTG ne renvoie pas le texte (ex: "0 msec" ou "45 GB")
+         */
+        $url = "https://{$ip}/api/table.json?content=sensors&output=json&columns=objid,status,status_raw,sensor,lastvalue&count=5000&username={$username}&passhash={$passhash}";
         
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -39,7 +42,6 @@ class PrtgService
         if ($output) {
             $decoded = json_decode($output, true);
             $sensors = $decoded['sensors'] ?? [];
-            
             
             Log::info("Nebula Wide Sync : " . count($sensors) . " capteurs reçus du Cloud.");
             
