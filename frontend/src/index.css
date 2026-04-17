@@ -4,75 +4,131 @@
 
 @layer base {
   :root {
-    /* --- MODE CLAIR (Nebula Light) --- */
-    --background: 210 40% 98%;    /* Fond gris perle très clair */
-    --foreground: 222.2 84% 4.9%; /* Texte bleu nuit */
-
-    --card: 0 0% 100%;            /* Cartes blanches */
+    /* --- MODE CLAIR NEBULA --- */
+    --background: 210 40% 98%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
-
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 221.2 83.2% 53.3%; /* Bleu vif pour le mode clair */
+    --primary: 221.2 83.2% 53.3%;
     --primary-foreground: 210 40.9% 98%;
-
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
-
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
-
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
-
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40.9% 98%;
-
-    --border: 214.3 31.8% 91.4%;  /* Bordures discrètes */
+    --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.75rem;
   }
+}
 
-  .dark {
-    /* --- MODE SOMBRE (Ton design Nebula actuel) --- */
-    --background: 224 71% 4%; 
-    --foreground: 213 31% 91%;
+/* ==========================================================================
+   ANIMATIONS MÉTÉO NEBULA (VÉRISTES & LISIBLES)
+   ========================================================================== */
 
-    --card: 224 71% 7%; 
-    --card-foreground: 213 31% 91%;
-
-    --popover: 224 71% 4%;
-    --popover-foreground: 213 31% 91%;
-
-    --primary: 210 40.9% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 222.2 47.4% 11.2%;
-    --secondary-foreground: 210 40.9% 98%;
-
-    --muted: 222.2 47.4% 11.2%;
-    --muted-foreground: 215.4 16.3% 56.9%;
-
-    --accent: 222.2 47.4% 11.2%;
-    --accent-foreground: 210 40.9% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40.9% 98%;
-
-    --border: 216 34% 17%; 
-    --input: 216 34% 17%;
-    --ring: 216 34% 17%;
+/* --- 1. PLUIE (Lente et Lourde pour Vigilance) --- */
+@keyframes rain-drop {
+  0% { 
+    transform: translateY(-100px); 
+    opacity: 0; 
+  }
+  20% { 
+    opacity: 0.7; 
+  }
+  80% { 
+    opacity: 0.7; 
+  }
+  100% { 
+    transform: translateY(800px); 
+    opacity: 0; 
   }
 }
 
+.animate-drop {
+  animation: rain-drop linear infinite;
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.8));
+  width: 3px;
+  height: 60px; /* Goutte allongée pour compenser la lenteur */
+}
+
+/* --- 2. ORAGE (Clignotement Respiratoire Ralenti) --- */
+@keyframes flash-bg {
+  0%, 100% { background-color: #b91c1c; } /* Rouge Foncé (red-700) */
+  50% { background-color: #ef4444; }    /* Rouge Vif (red-500) */
+}
+
+.animate-flash-bg {
+  animation: flash-bg 3s ease-in-out infinite;
+}
+
+/* --- 3. ÉCLAIR (Flash Stroboscopique Aléatoire) --- */
+@keyframes lightning {
+  0%, 85%, 100% { opacity: 0; }
+  88% { opacity: 0.5; }
+  90% { opacity: 0; }
+  92% { opacity: 0.5; }
+}
+
+.animate-lightning {
+  animation: lightning 6s ease-in-out infinite;
+}
+
+/* --- 4. SOLEIL (Rayonnement et Rotation) --- */
+@keyframes sun-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes sun-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.1); }
+}
+
+.sun-glow {
+  background: radial-gradient(circle at center, rgba(251, 191, 36, 0.4) 0%, transparent 70%);
+  filter: blur(40px);
+}
+
+.animate-spin-slow {
+  animation: sun-rotate 12s linear infinite;
+}
+
+/* ==========================================================================
+   UTILITAIRES DE STRUCTURE
+   ========================================================================== */
+
 @layer base {
   * {
-    @apply border-border; /* Utilise la variable de bordure Tailwind */
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground transition-colors duration-300;
     font-feature-settings: "rlig" 1, "calt" 1;
+    overflow: hidden; 
   }
+}
+
+
+@keyframes carousel-progress {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+.animate-carousel-progress {
+  animation: carousel-progress linear forwards;
+}
+
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
