@@ -4,6 +4,7 @@ import { MainLayout } from '@/components/layouts/MainLayout';
 import { FamilyCard } from '@/components/FamilyCard';
 import { FamilyDetailView } from './components/views/FamilyDetailView'; 
 import { ApplicationDetailView } from './components/views/ApplicationDetailView';
+import { MonitorView } from './components/views/MonitorView'; // Import de la vue Monitor
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 function App() {
@@ -11,24 +12,18 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
- 
+  // Navigation par état
   const [selectedFamilyName, setSelectedFamilyName] = useState(null);
   const [selectedAppId, setSelectedAppId] = useState(null);
 
-  
+  // Pagination du Dashboard
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  // Calculs pour la pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  
-  const currentFamilies = stats?.families?.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil((stats?.families?.length || 0) / itemsPerPage);
-
+  // Détection de la route pour les écrans de l'openspace
+  const isMonitorMode = window.location.pathname === '/monitor';
 
   const fetchGlobalStats = useCallback(() => {
-  
     if (!stats) setLoading(true);
 
     api.get('/dashboard/stats')
@@ -48,16 +43,23 @@ function App() {
       .finally(() => {
         setLoading(false);
       });
-  }, []); 
+  }, [stats]); 
 
-  // Cycle de rafraîchissement (Initial + toutes les 60s)
   useEffect(() => {
-    fetchGlobalStats();
-    const interval = setInterval(fetchGlobalStats, 60000);
-    return () => clearInterval(interval);
-  }, [fetchGlobalStats]);
+    // On ne lance pas les stats globales si on est en mode Monitor (il a sa propre logique de fetch)
+    if (!isMonitorMode) {
+      fetchGlobalStats();
+      const interval = setInterval(fetchGlobalStats, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [fetchGlobalStats, isMonitorMode]);
 
-  // Vue Détail Application
+  // 1. ROUTE SPÉCIFIQUE : MONITOR (Écrans autonomes)
+  if (isMonitorMode) {
+    return <MonitorView />;
+  }
+
+  // 2. VUE DÉTAIL APPLICATION
   if (selectedAppId) {
     return (
       <ApplicationDetailView 
@@ -67,7 +69,7 @@ function App() {
     );
   }
 
-  // Vue Détail Famille (Quartier)
+  // 3. VUE DÉTAIL FAMILLE
   if (selectedFamilyName) {
     return (
       <FamilyDetailView 
@@ -78,7 +80,7 @@ function App() {
     );
   }
 
-  // Écran de chargement initial
+  // 4. ÉCRAN DE CHARGEMENT
   if (loading && !stats) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#020617]">
@@ -92,7 +94,7 @@ function App() {
     );
   }
 
-  // Écran d'erreur critique
+  // 5. ÉCRAN D'ERREUR
   if (error) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#020617] p-6 text-center">
@@ -106,19 +108,22 @@ function App() {
           <p className="font-bold text-slate-400 border-l-2 border-red-600 pl-4 text-sm text-left">
             {error}
           </p>
-          <div className="flex flex-col gap-3">
-            <button 
-              onClick={() => fetchGlobalStats()} 
-              className="rounded-xl bg-red-600/10 border border-red-600/50 px-8 py-3 text-xs font-black text-red-500 shadow-lg hover:bg-red-600 hover:text-white transition-all active:scale-95 uppercase tracking-widest"
-            >
-              Retry Connection
-            </button>
-          </div>
+          <button 
+            onClick={() => fetchGlobalStats()} 
+            className="w-full rounded-xl bg-red-600/10 border border-red-600/50 px-8 py-3 text-xs font-black text-red-500 uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all"
+          >
+            Retry Connection
+          </button>
         </div>
       </div>
     );
   }
 
+  // 6. DASHBOARD PRINCIPAL (Calculs pagination)
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentFamilies = stats?.families?.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil((stats?.families?.length || 0) / itemsPerPage);
 
   return (
     <MainLayout stats={stats} onNavigateHome={() => {
@@ -129,11 +134,10 @@ function App() {
         
         {/* FLÈCHE GAUCHE */}
         <div className="w-16 flex justify-center">
-          {totalPages > 1 && (
+          {totalPages > 1 && currentPage > 1 && (
             <button 
-              disabled={currentPage === 1}
               onClick={() => setCurrentPage(prev => prev - 1)}
-              className="group flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900/40 border border-white/5 text-slate-500 hover:border-blue-500 hover:text-blue-400 disabled:opacity-0 disabled:pointer-events-none transition-all duration-300 backdrop-blur-md shadow-2xl"
+              className="group flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900/40 border border-white/5 text-slate-500 hover:border-blue-500 hover:text-blue-400 transition-all duration-300 backdrop-blur-md shadow-2xl"
             >
               <ChevronLeft size={28} className="group-hover:-translate-x-1 transition-transform" />
             </button>
@@ -163,11 +167,10 @@ function App() {
 
         {/* FLÈCHE DROITE */}
         <div className="w-16 flex justify-center">
-          {totalPages > 1 && (
+          {totalPages > 1 && currentPage < totalPages && (
             <button 
-              disabled={currentPage === totalPages}
               onClick={() => setCurrentPage(prev => prev + 1)}
-              className="group flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900/40 border border-white/5 text-slate-500 hover:border-blue-500 hover:text-blue-400 disabled:opacity-0 disabled:pointer-events-none transition-all duration-300 backdrop-blur-md shadow-2xl"
+              className="group flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900/40 border border-white/5 text-slate-500 hover:border-blue-500 hover:text-blue-400 transition-all duration-300 backdrop-blur-md shadow-2xl"
             >
               <ChevronRight size={28} className="group-hover:translate-x-1 transition-transform" />
             </button>
