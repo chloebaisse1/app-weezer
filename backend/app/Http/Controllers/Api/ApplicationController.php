@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Application;
 use App\Models\UrbaQuartier;
+use App\Models\SondeDetail;
 use App\Services\PrtgService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -196,4 +197,87 @@ public function show($id, PrtgService $prtgService): JsonResponse
         if ($statuses->contains(4)) return 50;
         return 100;
     }
+
+
+
+    /**
+ * Récupère les données structurées pour le mur de supervision (Wallboard)
+ * Groupe les 116+ applications par Famille avec leurs états de santé
+ */
+public function monitorData(PrtgService $prtgService): \Illuminate\Http\JsonResponse
+{
+    try {
+        // 1. Charger tous les quartiers (familles)
+        $familles = \App\Models\UrbaQuartier::all();
+
+        // 2. Charger TOUTES les applications concernées séparément
+        // On évite ainsi la jointure automatique problématique
+        $applications = \App\Models\Application::whereIn('APPHEB', [2, 3])
+            ->with('sondes')
+            ->get();
+
+        // 3. Récupérer les données PRTG (Logique inchangée)
+        $allPrtgIds = \App\Models\SondeDetail::whereHas('application', function($q) {
+                $q->whereIn('APPHEB', [2, 3]);
+            })
+            ->pluck('SONPRTG')
+            ->map(fn($id) => (int)trim($id))
+            ->filter()
+            ->unique()
+            ->toArray();
+
+        $prtgData = !empty($allPrtgIds) ? $prtgService->getSensorsStatuses($allPrtgIds) : [];
+        $liveMap = collect($prtgData)->keyBy(fn($item) => (int)($item['objid'] ?? 0));
+
+        // 4. Mapper les données manuellement en PHP
+        $result = $familles->map(function($famille) use ($applications, $liveMap) {
+            
+            // On filtre les applications qui appartiennent à cette famille en PHP
+            // (int) convertit le "character varying" de la DB en entier proprement
+            $appsOfFamily = $applications->filter(function($app) use ($famille) {
+                return (int)$app->APPFAMILLE === (int)$famille->id;
+            });
+
+            if ($appsOfFamily->isEmpty()) return null;
+
+            $mappedApps = $appsOfFamily->map(function($app) use ($liveMap) {
+                $appStatuses = collect();
+                foreach ($app->sondes as $sonde) {
+                    $sid = (int)trim($sonde->SONPRTG);
+                    if ($liveMap->has($sid)) {
+                        $appStatuses->push((int)($liveMap->get($sid)['status_raw'] ?? 3));
+                    }
+                }
+                
+                $health = 100;
+                if ($appStatuses->contains(5) || $appStatuses->contains(13) || $appStatuses->contains(14)) {
+                    $health = 0;
+                } elseif ($appStatuses->contains(4) || $appStatuses->contains(10)) {
+                    $health = 50;
+                }
+
+                return [
+                    'id' => $app->IDAPP,
+                    'name' => $app->APPNOM,
+                    'health_score' => $health
+                ];
+            });
+
+            return [
+                'id' => $famille->id,
+                'name' => $famille->QURBLIB,
+                'apps_count' => $mappedApps->count(),
+                'applications' => $mappedApps->values()
+            ];
+        })
+        ->filter() // Supprime les familles sans applications
+        ->values();
+
+        return response()->json(['success' => true, 'data' => $result]);
+
+    } catch (\Exception $e) {
+        \Illuminate\Support\Facades\Log::error("Nebula Monitor Error: " . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+    }
+}
 }
