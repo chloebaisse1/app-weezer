@@ -3,14 +3,16 @@ import { Activity, EyeOff } from 'lucide-react';
 
 export function ApplicationCard({ app, onSelect }) {
   
-  const statusId = app.status?.id ?? 0;
-  const statusLabel = app.status?.label || 'NON SUIVI';
-  const updatedAt = app.status?.updated_at || 'N/A';
+ 
+  const statusId = app.status_id ?? 0;
+  const statusLabel = app.status_label || 'NON SUIVI';
+  const updatedAt = new Date().toISOString().split('T')[0]; 
   const healthScore = app.health_score ?? 0;
+  const activeSondes = app.active_sondes_count ?? 0;
 
   const getTheme = (id) => {
     switch (id) {
-      case 3: // UP
+      case 3: // OPERATIONAL (UP)
         return { 
           stroke: '#10b981', 
           text: 'text-emerald-600 dark:text-emerald-400', 
@@ -26,7 +28,7 @@ export function ApplicationCard({ app, onSelect }) {
           border: 'border-amber-500/20', 
           dot: 'bg-amber-500' 
         };
-      case 5: case 13: case 14: // DOWN
+      case 5: case 13: case 14: // CRITICAL (DOWN)
         return { 
           stroke: '#ef4444', 
           text: 'text-red-600 dark:text-red-400', 
@@ -49,7 +51,7 @@ export function ApplicationCard({ app, onSelect }) {
 
   return (
     <div 
-      onClick={() => onSelect(app.id)}
+      onClick={() => onSelect(app.id || app.IDAPP)}
       className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 rounded-2xl p-6 shadow-sm dark:shadow-2xl hover:border-blue-500/50 hover:bg-slate-50 dark:hover:bg-slate-900/80 transition-all group flex flex-col justify-between h-full cursor-pointer active:scale-[0.98]"
     >
       
@@ -57,7 +59,7 @@ export function ApplicationCard({ app, onSelect }) {
       <div className="flex justify-between items-start mb-6">
         <div>
           <h3 className="text-xl font-[1000] text-slate-900 dark:text-white italic tracking-tighter uppercase leading-none mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-            {app.name}
+            {app.name || app.APPNOM}
           </h3>
           <p className="text-[8px] font-black text-slate-400 dark:text-slate-600 tracking-widest uppercase mt-1 italic">
             Détails Télémétrie
@@ -104,10 +106,10 @@ export function ApplicationCard({ app, onSelect }) {
         </div>
       </div>
 
-      {/* FOOTER CARTE */}
+      {/* FOOTER CARTE : Nombre de sondes dynamique */}
       <div className="pt-4 border-t border-slate-100 dark:border-white/5 flex justify-between items-center">
-        <div className="text-[8px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-widest">
-          {app.sensors_count || 0} Sondes Actives
+        <div className="text-[8px] text-slate-400 dark:text-slate-600 font-[1000] uppercase tracking-widest">
+          {activeSondes} Sondes Actives
         </div>
         <div className={`${theme.bg} ${theme.text} text-[9px] font-black px-3 py-1 rounded-md border ${theme.border} uppercase`}>
             {statusLabel}
