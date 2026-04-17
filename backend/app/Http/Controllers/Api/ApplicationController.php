@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Log;
 
 class ApplicationController extends Controller
 {
-   
+    
     public function index(): JsonResponse
     {
         $applications = Application::withCount('sondes')
@@ -24,116 +24,150 @@ class ApplicationController extends Controller
         ]);
     }
 
-    public function getByFamily($name): JsonResponse
+    
+    public function getByFamily($name, PrtgService $prtgService): JsonResponse
     {
-    try {
-        // On utilise ILIKE pour ignorer la casse (Majuscules/Minuscules)
-        // Et on s'assure de récupérer les applications liées
-        $quartier = UrbaQuartier::where('QURBLIB', 'ILIKE', $name)->first();
+        $t_start = microtime(true);
+        try {
+           
+            $quartier = UrbaQuartier::where('QURBLIB', 'ILIKE', $name)->first();
+            if (!$quartier) return response()->json(['success' => false], 404);
 
-        if (!$quartier) {
-            return response()->json([
-                'success' => false, 
-                'message' => "Le quartier '{$name}' n'existe pas dans la base de données."
-            ], 404);
-        }
+            
+            $applications = Application::whereRaw('CAST("APPFAMILLE" AS INTEGER) = ?', [$quartier->id])
+                ->whereIn('APPHEB', [2, 3])
+                ->with('sondes')
+                ->get();
 
-        // On récupère les applications dont l'APPFAMILLE (string) correspond à l'ID (int)
-        // On fait le cast ici aussi pour éviter l'erreur de type de tout à l'heure
-        $applications = Application::whereRaw('CAST("APPFAMILLE" AS INTEGER) = ?', [$quartier->id])
-            ->whereIn('APPHEB', [2, 3])
-            ->withCount('sondes')
-            ->get();
+            
+            $allIds = $applications->flatMap(fn($app) => $app->sondes->pluck('SONPRTG'))
+                ->map(fn($id) => (int)trim($id))
+                ->filter()
+                ->unique()
+                ->toArray();
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'family_name' => $quartier->QURBLIB,
-                'applications' => $applications,
-                'family_stats' => [
-                    'total' => $applications->count(),
-                    'up'    => $applications->count(), 
-                    'warn'  => 0,
-                    'down'  => 0,
-                ]
-            ]
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false, 
-            'message' => "Erreur Nebula Vue 2 : " . $e->getMessage()
-        ], 500);
-    }
-}
+            $t_sql = round(microtime(true) - $t_start, 3);
 
-    public function show($id, PrtgService $prtgService): JsonResponse
-    {
-        // On augmente le temps d'exécution pour le scan multi-curl
-        set_time_limit(120); 
+            
+            $t_prtg_start = microtime(true);
+            $sensors = !empty($allIds) ? $prtgService->getSensorsStatuses($allIds) : [];
+            $t_prtg = round(microtime(true) - $t_prtg_start, 3);
 
-        // Récupération de l'application avec ses sondes et son quartier
-        $application = Application::with(['sondes', 'quartier'])->find($id);
-        
-        if (!$application) {
-            return response()->json(['success' => false, 'message' => 'Application Nebula introuvable'], 404);
-        }
+            
+            $liveMap = collect($sensors)->keyBy(fn($item) => (int)($item['objid'] ?? 0));
+            $countReceived = count($sensors);
 
-        // Extraction des IDs PRTG uniques
-        $allIds = $application->sondes->pluck('SONPRTG')->filter()->unique()->toArray();
-        
-        $allPrtgData = [];
-        if (!empty($allIds)) {
-            // Chunking de sécurité (max 30 sondes par requête API PRTG)
-            $chunks = array_chunk($allIds, 30); 
-            foreach ($chunks as $chunk) {
-                $batch = $prtgService->getSensorsStatuses($chunk);
-                if (!empty($batch)) {
-                    $allPrtgData = array_merge($allPrtgData, $batch);
+            foreach ($applications as $app) {
+                $appStatuses = collect();
+                $activeCount = 0; 
+
+                foreach ($app->sondes as $sonde) {
+                    $sid = (int)trim($sonde->SONPRTG);
+                    
+                    if ($liveMap->has($sid)) {
+                        $sensorData = $liveMap->get($sid);
+                        $statusRaw = (int)($sensorData['status_raw'] ?? 0);
+                        
+                        $sonde->status_id = $statusRaw;
+                        $sonde->sensor_name = $sensorData['sensor'] ?? 'Sonde PRTG';
+                        $appStatuses->push($statusRaw);
+                        
+                   
+                        $activeCount++;
+                    }
+                }
+
+                
+                $app->active_sondes_count = $activeCount;
+
+            
+                if ($appStatuses->isEmpty()) {
+                    $app->status_id = 0; 
+                    $app->status_label = 'NON SUIVI'; 
+                    $app->health_score = 0;
+                } else {
+                    if ($appStatuses->contains(5) || $appStatuses->contains(13) || $appStatuses->contains(14)) {
+                        $app->status_id = 5; 
+                        $app->status_label = 'CRITICAL'; 
+                        $app->health_score = 0;
+                    } elseif ($appStatuses->contains(4) || $appStatuses->contains(10)) {
+                        $app->status_id = 4; 
+                        $app->status_label = 'WARNING'; 
+                        $app->health_score = 50;
+                    } else {
+                        $app->status_id = 3; 
+                        $app->status_label = 'OPERATIONAL'; 
+                        $app->health_score = 100;
+                    }
                 }
             }
+
+            $t_total = round(microtime(true) - $t_start, 3);
+
+            
+            $familyStats = [
+                'total' => $applications->count(),
+                'up'    => $applications->where('status_id', 3)->count(),
+                'warn'  => $applications->where('status_id', 4)->count(),
+                'down'  => $applications->where('status_id', 5)->count(),
+            ];
+
+            return response()->json([
+                'success' => true,
+                'debug' => [
+                    'time_sql' => $t_sql . 's',
+                    'time_prtg' => $t_prtg . 's',
+                    'time_total' => $t_total . 's',
+                    'sensors_requested' => count($allIds),
+                    'sensors_received' => $countReceived
+                ],
+                'data' => [
+                    'family_name' => $quartier->QURBLIB,
+                    'applications' => $applications,
+                    'family_stats' => $familyStats
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Nebula API Error (getByFamily): " . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
+    }
 
-        // On mappe les résultats PRTG sur nos sondes locales
-        $liveMap = collect($allPrtgData)->keyBy(fn($item) => (int)$item['objid']);
-        
-        $criticalCount = 0;
-        $warningCount = 0;
+    /**
+     * Vue détaillée d'une application spécifique
+     */
+    public function show($id, PrtgService $prtgService): JsonResponse
+    {
+        try {
+            $application = Application::with(['sondes', 'quartier'])->find($id);
+            if (!$application) return response()->json(['success' => false], 404);
 
-        foreach ($application->sondes as $sonde) {
-            $sondeId = (int)$sonde->SONPRTG;
-            if ($liveMap->has($sondeId)) {
-                $data = $liveMap->get($sondeId);
-                $sonde->status_id = $data['status_raw'] ?? 3; // 3 = OK en PRTG
-                $sonde->last_value = $data['lastvalue'] ?? 'N/A';
-                $sonde->name = $data['sensor'] ?? $sonde->SONNOM;
-                
-                // Comptage pour le health score
-                if ($sonde->status_id == 5) $criticalCount++; // 5 = Down
-                if ($sonde->status_id == 4) $warningCount++;  // 4 = Warning
-            } else {
-                $sonde->status_id = 0; // Inconnu
-                $sonde->last_value = 'No Data';
+            $allIds = $application->sondes->pluck('SONPRTG')->map(fn($id) => (int)trim($id))->filter()->unique()->toArray();
+            $prtgData = !empty($allIds) ? $prtgService->getSensorsStatuses($allIds) : [];
+            $liveMap = collect($prtgData)->keyBy(fn($item) => (int)($item['objid'] ?? 0));
+            
+            foreach ($application->sondes as $sonde) {
+                $sid = (int)trim($sonde->SONPRTG);
+                if ($liveMap->has($sid)) {
+                    $d = $liveMap->get($sid);
+                    $sonde->status_id = $d['status_raw'] ?? 3;
+                    $sonde->last_value = $d['lastvalue'] ?? 'N/A';
+                    $sonde->sensor_name = $d['sensor'] ?? 'Sonde PRTG';
+                }
             }
-        }
 
-        
-        $totalSondes = count($allIds);
-        $healthScore = 100;
-        if ($totalSondes > 0) {
-            $penalty = ($criticalCount * 20) + ($warningCount * 5);
-            $healthScore = max(0, 100 - $penalty);
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $application->IDAPP,
+                    'name' => $application->APPNOM,
+                    'sensors' => $application->sondes,
+                    'health_score' => $application->status_id == 3 ? 100 : ($application->status_id == 4 ? 50 : 0)
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Nebula API Error (show): " . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'id' => $application->id,
-                'name' => $application->APPNOM,
-                'family_name' => $application->quartier->QURBLIB ?? 'Indéfini',
-                'health_score' => $healthScore,
-                'sensors' => $application->sondes,
-                'last_sync' => now()->format('H:i:s')
-            ]
-        ]);
     }
 }
